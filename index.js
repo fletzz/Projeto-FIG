@@ -19,7 +19,7 @@ if (!fs.existsSync(tmpFolder)) {
 const client = new Client({
     puppeteer: {
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
     }
 });
 
@@ -50,13 +50,25 @@ client.on('message', async (message) => {
         try {
             console.log('Recebendo mídia para converter em figurinha...');
             
-            // Baixa a mídia
-            const media = await message.downloadMedia();
+            // Baixa a mídia com retry
+            let media = null;
+            let retryCount = 0;
+            const maxRetries = 3;
             
-            if (!media) {
-                console.log('Falha ao baixar a mídia');
-                message.reply('Falha ao baixar a mídia. Tente novamente.');
-                return;
+            while (!media && retryCount < maxRetries) {
+                try {
+                    media = await message.downloadMedia();
+                    if (!media) {
+                        throw new Error('Mídia vazia');
+                    }
+                } catch (downloadError) {
+                    console.log(`Tentativa ${retryCount + 1} falhou:`, downloadError.message);
+                    retryCount++;
+                    if (retryCount === maxRetries) {
+                        throw new Error('Falha ao baixar a mídia após várias tentativas');
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // Espera 1 segundo antes de tentar novamente
+                }
             }
             
             console.log('Tipo de mídia:', media.mimetype);
@@ -109,16 +121,32 @@ client.on('message', async (message) => {
                 
                 // Verifica se o arquivo de saída foi criado
                 if (fs.existsSync(stickerPath)) {
-                    // Envia a figurinha
-                    const sticker = MessageMedia.fromFilePath(stickerPath);
-                    await message.reply(sticker, undefined, { sendMediaAsSticker: true });
-                    console.log('Figurinha enviada com sucesso!');
+                    // Envia a figurinha com retry
+                    let sendRetryCount = 0;
+                    const maxSendRetries = 3;
+                    let sent = false;
+                    
+                    while (!sent && sendRetryCount < maxSendRetries) {
+                        try {
+                            const sticker = MessageMedia.fromFilePath(stickerPath);
+                            await message.reply(sticker, undefined, { sendMediaAsSticker: true });
+                            console.log('Figurinha enviada com sucesso!');
+                            sent = true;
+                        } catch (sendError) {
+                            console.error(`Erro ao enviar figurinha (tentativa ${sendRetryCount + 1}):`, sendError);
+                            sendRetryCount++;
+                            if (sendRetryCount === maxSendRetries) {
+                                throw new Error('Falha ao enviar figurinha após várias tentativas');
+                            }
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                        }
+                    }
                 } else {
                     throw new Error('Arquivo de figurinha não foi criado');
                 }
             } catch (processingError) {
                 console.error('Erro no processamento:', processingError);
-                message.reply('Erro ao processar a mídia. Tente novamente com outra imagem.');
+                await message.reply('Erro ao processar a mídia. Tente novamente com outra imagem.');
             } finally {
                 // Limpa os arquivos temporários
                 try {
@@ -130,7 +158,11 @@ client.on('message', async (message) => {
             }
         } catch (error) {
             console.error('Erro geral:', error);
-            message.reply('Desculpe, houve um erro ao criar a figurinha. Tente novamente.');
+            try {
+                await message.reply('Desculpe, houve um erro ao criar a figurinha. Tente novamente.');
+            } catch (replyError) {
+                console.error('Erro ao enviar mensagem de erro:', replyError);
+            }
         }
     }
 });
