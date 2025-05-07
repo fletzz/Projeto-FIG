@@ -1,0 +1,19 @@
+# Dependências
+node_modules/
+package-lock.json
+
+# Arquivos temporários
+tmp/
+*.log
+.wwebjs_cache/
+
+# Ambiente
+.env
+
+# Arquivos do sistema
+.DS_Store
+Thumbs.db
+
+# Arquivos de configuração IDE
+.vscode/
+.idea/ 
