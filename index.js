@@ -49,7 +49,6 @@ client.on('message', async (message) => {
     if (caption.includes('/fig') && message.hasMedia) {
         try {
             console.log('Recebendo mídia para converter em figurinha...');
-            message.reply('Convertendo em figurinha...');
             
             // Baixa a mídia
             const media = await message.downloadMedia();
@@ -101,8 +100,8 @@ client.on('message', async (message) => {
                     console.log('Processando imagem...');
                     await sharp(mediaPath)
                         .resize(512, 512, {
-                            fit: 'contain',
-                            background: { r: 0, g: 0, b: 0, alpha: 0 }
+                            fit: 'cover',
+                            position: 'centre'
                         })
                         .toFormat('webp')
                         .toFile(stickerPath);
