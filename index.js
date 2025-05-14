@@ -1,3 +1,4 @@
+require('dotenv').config();
 const { Client, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const sharp = require('sharp');
@@ -10,18 +11,53 @@ const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
 // Pasta para salvar as imagens temporárias
-const tmpFolder = path.join(__dirname, 'tmp');
+const tmpFolder = process.env.TEMP_FOLDER || path.join(__dirname, 'tmp');
 if (!fs.existsSync(tmpFolder)) {
-    fs.mkdirSync(tmpFolder);
+    fs.mkdirSync(tmpFolder, { recursive: true });
+}
+
+// Configurações do cliente
+const clientConfig = {
+    puppeteer: {
+        headless: true,
+        args: (process.env.CHROME_ARGS || '--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage').split(',')
+    }
+};
+
+if (process.env.CHROME_PATH) {
+    clientConfig.puppeteer.executablePath = process.env.CHROME_PATH;
 }
 
 // Inicializa o cliente WhatsApp
-const client = new Client({
-    puppeteer: {
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+const client = new Client(clientConfig);
+
+// Mantém o processo vivo
+process.on('SIGTERM', async () => {
+    console.log('Recebido SIGTERM. Desconectando...');
+    try {
+        await client.destroy();
+    } catch (err) {
+        console.error('Erro ao desconectar:', err);
     }
+    process.exit(0);
 });
+
+// Reconexão automática
+let reconnectInterval;
+const startReconnectInterval = () => {
+    if (!reconnectInterval) {
+        reconnectInterval = setInterval(async () => {
+            if (!client.isConnected) {
+                console.log('Tentando reconectar...');
+                try {
+                    await client.initialize();
+                } catch (err) {
+                    console.error('Erro ao reconectar:', err);
+                }
+            }
+        }, 30000); // Tenta reconectar a cada 30 segundos
+    }
+};
 
 // Gera o QR code para autenticação
 client.on('qr', (qr) => {
@@ -170,10 +206,17 @@ client.on('message', async (message) => {
 // Log de erros
 client.on('disconnected', (reason) => {
     console.log('Cliente desconectado:', reason);
+    startReconnectInterval();
 });
 
 // Inicia o cliente
 console.log('Iniciando cliente WhatsApp...');
-client.initialize().catch(err => {
-    console.error('Erro ao inicializar o cliente:', err);
-});
+client.initialize()
+    .then(() => {
+        console.log('Cliente inicializado com sucesso!');
+        startReconnectInterval();
+    })
+    .catch(err => {
+        console.error('Erro ao inicializar o cliente:', err);
+        startReconnectInterval();
+    });
