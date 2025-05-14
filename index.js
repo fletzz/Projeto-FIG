@@ -73,8 +73,12 @@ const startReconnectInterval = () => {
 
 // Gera o QR code para autenticação
 client.on('qr', (qr) => {
-    console.log('QR Code gerado. Escaneie para autenticar:');
-    qrcode.generate(qr, { small: true });
+    console.log('\n=================  QR CODE  =================\n');
+    qrcode.generate(qr, { small: true }, (qrcode) => {
+        console.log(qrcode);
+    });
+    console.log('\n============================================\n');
+    console.log('Escaneie o QR Code acima com seu WhatsApp\n');
 });
 
 client.on('ready', () => {
