@@ -6,6 +6,18 @@ const fs = require('fs');
 const path = require('path');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
+const http = require('http');
+
+// Criar servidor HTTP básico para o Render
+const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Bot is running!\n');
+});
+
+const port = process.env.PORT || 3000;
+server.listen(port, () => {
+    console.log(`Servidor rodando na porta ${port}`);
+});
 
 // Configurar o caminho do ffmpeg
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
